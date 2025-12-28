@@ -1,0 +1,29 @@
+app:
+  log_level: debug
+  locale:
+    placeholder: Probing...
+    measurements: 
+      # You can omit configuration for a specific measurement to use default labels
+      # Available measurements: co2, temp, humidity, pm25, pm10, tvoc, etvoc, battery, noise
+      temp:
+        name: Temperature
+        measurement: C
+telegram:
+  token: "YOUR_TELEGRAM_BOT_TOKEN"
+  antispam_duration: 10  # Time in seconds between command calls in the same chat
+  allowed_chats:  # List of chat IDs where the bot can be used
+    - 0 # Allow to be used in any chat
+    - 123456
+    - -123456
+cleargrass:
+  apps:
+    defman:  # Unique identifier
+      key: SOME-KEY
+      secret: someverysecretvalue
+    notdefman:
+      key: SOME-OTHER-KEY
+      secret: somesupersecretvalue
+  devices:
+    ABCDEF1234:
+      room_name: Bedroom
+      owner_username: defman

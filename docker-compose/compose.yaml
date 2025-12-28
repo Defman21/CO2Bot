@@ -1,0 +1,9 @@
+﻿services:
+  co2bot:
+    image: co2bot
+    build:
+      context: ../
+      dockerfile: CO2Bot/Dockerfile
+    volumes:
+      - ./config/config.yaml:/app/config/config.yaml
+      - ./cache/:/app/cache/
