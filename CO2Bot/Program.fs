@@ -7,13 +7,15 @@ open CO2Bot.Bot
 open CO2Bot.Config
 
 open Telegram.Bot
+open Telegram.Bot.Types
 
 
 [<EntryPoint>]
 let main _ =
     Log.Information("Starting bot...")
-    Config.readConfig ()
     Tokens.readFromFile ()
+
+    let { Telegram = telegramCfg } = Config.getConfig ()
 
     let onTermination _ =
         Bot.CTS.Cancel()
@@ -26,6 +28,12 @@ let main _ =
         do! Async.SwitchToThreadPool()
 
         let! me = Bot.instance.GetMe() |> Async.AwaitTask
+
+        do!
+            Bot.instance.SetMyCommands(
+                [ BotCommand(command = $"/%s{telegramCfg.Command.Name}", description = telegramCfg.Command.Description) ]
+            )
+            |> Async.AwaitTask
 
         Log.Debug("I am {bot}", me)
 

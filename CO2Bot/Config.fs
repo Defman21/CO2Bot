@@ -57,12 +57,17 @@ and TelegramConfig() =
     member val Token: string = "" with get, set
     member val AntispamDuration: float = 30.0 with get, set
     member val AllowedChats: List<int64> = List() with get, set
-    member val CommandName: string = "temp" with get, set
+
+    member val Command: TelegramCommandConfig =
+        { Name = "temp"
+          Description = "Get thermostat data" } with get, set
 
     member private this.AllowAnyChat = this.AllowedChats[0] = 0
 
     member this.IsChatAllowed(chatId: int64) =
         this.AllowAnyChat || this.AllowedChats.Contains chatId
+
+and [<CLIMutable>] TelegramCommandConfig = { Name: string; Description: string }
 
 and [<CLIMutable>] CleargrassConfig =
     { Apps: Dictionary<string, CleargrassAppConfig>
@@ -77,7 +82,7 @@ and [<CLIMutable>] CleargrassDeviceConfig =
 module Config =
     let mutable private config: Config option = None
 
-    let readConfig () =
+    let private readConfig () =
         let deserializer =
             DeserializerBuilder().WithNamingConvention(UnderscoredNamingConvention.Instance).Build()
 

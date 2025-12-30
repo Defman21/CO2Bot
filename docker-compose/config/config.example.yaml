@@ -15,7 +15,9 @@ telegram:
     - 0 # Allow to be used in any chat
     - 123456
     - -123456
-  command_name: temp  # custom command name, temp by default (so /temp@yourbotname)
+  command:
+    name: temp  # custom command name, temp by default (so /temp@yourbotname)
+    description: Get thermostat data
 cleargrass:
   apps:
     defman:  # Unique identifier

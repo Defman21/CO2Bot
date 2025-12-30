@@ -114,7 +114,7 @@ module Bot =
             if not (botUsername.Equals(me.Username, StringComparison.OrdinalIgnoreCase)) then
                 return ()
 
-            if command = telegramCfg.CommandName then
+            if command = telegramCfg.Command.Name then
                 do! handleCommand me message
 
             return ()
