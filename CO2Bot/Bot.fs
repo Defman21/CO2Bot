@@ -28,7 +28,7 @@ module Bot =
 
     let instance = TelegramBotClient(telegramCfg.Token, cancellationToken = CTS.Token)
 
-    let antispam = Dictionary<int64, DateTime>()
+    let private antispam = Dictionary<int64, DateTime>()
 
     let onUpdate (update: Update) : Task =
         task { Log.Debug("Received an update ID {id}", update.Id) }
@@ -48,6 +48,8 @@ module Bot =
 
                 return ()
             else
+                antispam[message.Chat.Id] <- DateTime.UtcNow.AddSeconds(telegramCfg.AntispamDuration)
+
                 let! notifyMessage =
                     instance.SendMessage(message.Chat, text = textPlaceholder, replyParameters = message)
 
