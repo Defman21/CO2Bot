@@ -53,10 +53,11 @@ and AppLocaleMeasurementConfig() =
 // TODO: omitting measurement in YAML does not set the default value from AppLocaleMeasurementConfig defaults :/
 and [<CLIMutable>] AppLocaleEntry = { Name: string; Measurement: string }
 
-and [<CLIMutable>] TelegramConfig =
-    { Token: string
-      AntispamDuration: float
-      AllowedChats: List<int64> }
+and TelegramConfig() =
+    member val Token: string = "" with get, set
+    member val AntispamDuration: float = 30.0 with get, set
+    member val AllowedChats: List<int64> = List() with get, set
+    member val CommandName: string = "temp" with get, set
 
     member private this.AllowAnyChat = this.AllowedChats[0] = 0
 

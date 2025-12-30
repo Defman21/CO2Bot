@@ -33,7 +33,7 @@ module Bot =
     let onUpdate (update: Update) : Task =
         task { Log.Debug("Received an update ID {id}", update.Id) }
 
-    let handleCommandMax (_me: User) (message: Message) : Task =
+    let handleCommand (_me: User) (message: Message) =
         task {
             let nextCallAt = antispam.GetValueOrDefault(message.Chat.Id, DateTime.UtcNow)
             let now = DateTime.UtcNow
@@ -97,9 +97,7 @@ module Bot =
                 return ()
         }
 
-    let handleCommandUnknown (_me: User) (_message: Message) : Task = task { }
-
-    let onCommand (me: User) (message: Message) : Task =
+    let onCommand (me: User) (message: Message) =
         task {
             let space =
                 match message.Text.IndexOf ' ' with
@@ -110,21 +108,16 @@ module Bot =
 
             let command, botUsername =
                 match rawCommand.LastIndexOf '@' with
-                | at when at > 0 -> (rawCommand[.. at - 1], rawCommand[(at + 1) ..])
-                | _ -> (rawCommand, me.Username)
+                | at when at > 0 -> (rawCommand[1 .. at - 1], rawCommand[(at + 1) ..])
+                | _ -> (rawCommand[1..], me.Username)
 
             if not (botUsername.Equals(me.Username, StringComparison.OrdinalIgnoreCase)) then
-                return! null
+                return ()
 
-            let action =
-                match command with
-                | "/max" -> handleCommandMax
-                | _ -> handleCommandUnknown
+            if command = telegramCfg.CommandName then
+                do! handleCommand me message
 
-
-            do! action me message
-
-            return! null
+            return ()
         }
 
     let onMessage (me: User) (message: Message) (_: UpdateType) : Task =
