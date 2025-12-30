@@ -1,5 +1,6 @@
 namespace CO2Bot.Cleargrass.Api
 
+open System.Linq
 open CO2Bot.Cleargrass.Types
 
 open System.Net.Http.Json
@@ -70,39 +71,51 @@ module Api =
         let pmCond pm = not (pm = 99999.0)
         let batteryCond battery = not (battery = 100.0)
 
-        devices.Devices
-        |> List.iter (fun device ->
-            match device.Data with
-            | None -> ()
-            | Some data ->
-                let deviceName =
-                    match devicesConfig.ContainsKey(device.Info.MAC) with
-                    | true ->
-                        let cfg = devicesConfig[device.Info.MAC]
-                        $"%s{cfg.RoomName} (%s{cfg.OwnerUsername})"
-                    | false -> $"%s{device.Info.MAC}"
+        let devicePerMac =
+            devices.Devices
+            |> Seq.fold (fun state value -> Map.add value.Info.MAC value state) (Map<string, Device> [])
 
-                let CO2Emoji =
-                    match data.CO2 with
-                    | None -> ""
-                    | Some { Value = value } ->
-                        match value with
-                        | v when v > 1200.0 -> "🔴"
-                        | v when v > 800.0 -> "🟡"
-                        | _ -> "🟢"
+        devicesConfig
+        |> Seq.filter (fun cfg -> Map.containsKey cfg.Key devicePerMac)
+        |> Seq.fold
+            (fun
+                (state:
+                    {| Config: CleargrassDeviceConfig
+                       Data: DeviceData |} seq)
+                deviceCfg ->
+                match (Map.find deviceCfg.Key devicePerMac).Data with
+                | None -> state
+                | Some data ->
+                    state.Append
+                        {| Config = deviceCfg.Value
+                           Data = data |})
+            []
+        |> Seq.iter (fun device ->
+            let config = device.Config
+            let data = device.Data
 
+            let deviceName = $"%s{config.RoomName} (%s{config.OwnerUsername})"
 
-                sb.AppendLine $"<i>%s{HtmlText.Escape deviceName}</i>" |> ignore
-                append CO2Emoji locale.CO2 data.CO2 "0"
-                sb.Append "<blockquote expandable>" |> ignore
-                append "🌡" locale.Temp data.Temperature "0.0"
-                append "💧" locale.Humidity data.Humidity "0.0"
-                appendTo sb pmCond "🌫" locale.PM25 data.PM25 "0"
-                appendTo sb pmCond "🌫" locale.PM10 data.PM10 "0"
-                append "🧪" locale.TVOC data.TVOC "0"
-                append "🧪" locale.ETVOC data.ETVOC "0"
-                appendTo sb batteryCond "🔋" locale.Battery data.Battery "0"
-                append "🔊" locale.Noise data.Noise "0"
-                sb.AppendLine "</blockquote>" |> ignore)
+            let CO2Emoji =
+                match data.CO2 with
+                | None -> ""
+                | Some { Value = value } ->
+                    match value with
+                    | v when v > 1200.0 -> "🔴"
+                    | v when v > 800.0 -> "🟡"
+                    | _ -> "🟢"
+
+            sb.AppendLine $"<i>%s{HtmlText.Escape deviceName}</i>" |> ignore
+            append CO2Emoji locale.CO2 data.CO2 "0"
+            sb.Append "<blockquote expandable>" |> ignore
+            append "🌡" locale.Temp data.Temperature "0.0"
+            append "💧" locale.Humidity data.Humidity "0.0"
+            appendTo sb pmCond "🌫" locale.PM25 data.PM25 "0"
+            appendTo sb pmCond "🌫" locale.PM10 data.PM10 "0"
+            append "🧪" locale.TVOC data.TVOC "0"
+            append "🧪" locale.ETVOC data.ETVOC "0"
+            appendTo sb batteryCond "🔋" locale.Battery data.Battery "0"
+            append "🔊" locale.Noise data.Noise "0"
+            sb.AppendLine "</blockquote>" |> ignore)
 
         sb.ToString()
