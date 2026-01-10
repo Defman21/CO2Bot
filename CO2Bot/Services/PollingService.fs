@@ -2,6 +2,7 @@ namespace CO2Bot.Services
 
 open System
 open System.Threading
+open CO2Bot.Cleargrass.Tokens
 open CO2Bot.Services.Internal
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
@@ -31,3 +32,8 @@ type PollingService<'T when 'T :> IReceiverService>(sp: IServiceProvider, logger
     override this.ExecuteAsync(cts: CancellationToken) =
         logger.LogInformation("Started polling service")
         this.DoWork cts
+
+    override this.StopAsync(cts: CancellationToken) =
+        let tokens = sp.GetRequiredService<TokensService>()
+        tokens.saveToFile()
+        base.StopAsync(cts)

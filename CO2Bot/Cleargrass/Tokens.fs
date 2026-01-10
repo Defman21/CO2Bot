@@ -62,7 +62,9 @@ type TokensService(httpService: TokensHttpService, logger: ILogger<TokensService
                 logger.LogDebug("Adding {username} to cache...", entry.Key)
                 httpService.tokenCache.Add(entry.Key, entry.Value)
 
-    let saveToFile () =
+    do readFromFile ()
+
+    member _.saveToFile () =
         use stream = File.Open("./cache/tokens.json", FileMode.OpenOrCreate)
         stream.Seek(0L, SeekOrigin.Begin) |> ignore
         let tokensJson = JsonSerializer.Serialize(httpService.tokenCache)
@@ -70,8 +72,6 @@ type TokensService(httpService: TokensHttpService, logger: ILogger<TokensService
         stream.Close()
 
         logger.LogInformation("Saved tokens successfully...")
-
-    do readFromFile ()
 
     member _.getAccessToken(username: string) =
         async {
@@ -87,7 +87,6 @@ type TokensService(httpService: TokensHttpService, logger: ILogger<TokensService
                 | Some token ->
                     logger.LogInformation("Successfully retrieved token for {username}!", username)
                     httpService.tokenCache[username] <- token, DateTime.UtcNow.AddHours(1.0)
-                    saveToFile ()
                     Some token
 
             let token =
