@@ -5,23 +5,17 @@ open CO2Bot.Cleargrass.Types
 
 open System.Net.Http.Json
 open System.Web
-open CO2Bot.Log
 open CO2Bot.Config
 
 open System
 open System.Net.Http
 open System.Net.Http.Headers
 open System.Text
+open Microsoft.Extensions.Logging
 open Telegram.Bot.Extensions
 
-module Api =
-    let private apiHttpClient =
-        new HttpClient(BaseAddress = Uri "https://apis.cleargrass.com/")
-
-
-    let private devicesConfig = Config.getConfig().Cleargrass.Devices
-
-    let getDevices (token: string) =
+type ApiHttpService(httpClient: HttpClient, logger: ILogger<ApiHttpService>) =
+    member _.getDevices token =
         async {
             let uri = UriBuilder("http://localhost/v1/apis/devices")
             let query = HttpUtility.ParseQueryString(uri.Query)
@@ -30,20 +24,25 @@ module Api =
 
             use httpReq = new HttpRequestMessage(HttpMethod.Get, uri.Uri.PathAndQuery)
             httpReq.Headers.Authorization <- AuthenticationHeaderValue("Bearer", token)
-            let! response = apiHttpClient.SendAsync(httpReq) |> Async.AwaitTask
+            let! response = httpClient.SendAsync(httpReq) |> Async.AwaitTask
 
             match response.IsSuccessStatusCode with
             | false ->
                 let! body = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-                Log.Error("Failed to get devices: {body}", body)
+                logger.LogError("Failed to get devices: {body}", body)
                 return None
             | true ->
                 let! devices = response.Content.ReadFromJsonAsync<DevicesResponse>() |> Async.AwaitTask
-                Log.Debug("Devices: {devices}", devices)
+                logger.LogDebug("Devices: {devices}", devices)
                 return Some devices
         }
 
-    let buildMarkdownMessage (devices: DevicesResponse) =
+type ApiService(httpService: ApiHttpService) =
+    let devicesConfig = Config.getConfig().Cleargrass.Devices
+
+    member _.getDevices token = httpService.getDevices token
+
+    member _.buildMarkdownMessage(devices: DevicesResponse) =
         let { Measurements = locale } = Config.getLocale ()
 
         let appendTo

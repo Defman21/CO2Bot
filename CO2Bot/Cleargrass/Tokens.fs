@@ -11,19 +11,14 @@ open System.Text
 open System.Text.Json
 open CO2Bot.Cleargrass.Types
 open CO2Bot.Config
-open CO2Bot.Log
+open Microsoft.Extensions.Logging
 
 type private TokenCache = Dictionary<string, string * DateTime>
 
-module Tokens =
-    let private oauthHttpClient =
-        new HttpClient(BaseAddress = Uri "https://oauth.cleargrass.com/")
+type TokensHttpService(httpClient: HttpClient) =
+    member val tokenCache = TokenCache() with get, set
 
-    let private appConfig = Config.getConfig().Cleargrass.Apps
-
-    let private tokenCache = TokenCache()
-
-    let private getToken appKey appSecret =
+    member _.getToken appKey appSecret =
         async {
             let authString =
                 $"%s{appKey}:%s{appSecret}"
@@ -37,7 +32,7 @@ module Tokens =
             httpReq.Headers.Authorization <- AuthenticationHeaderValue("Basic", authString)
             httpReq.Content <- authData
 
-            let! response = oauthHttpClient.SendAsync(httpReq) |> Async.AwaitTask
+            let! response = httpClient.SendAsync(httpReq) |> Async.AwaitTask
 
             match response.IsSuccessStatusCode with
             | true ->
@@ -46,54 +41,60 @@ module Tokens =
             | false -> return None
         }
 
+
+type TokensService(httpService: TokensHttpService, logger: ILogger<TokensService>) =
+    let appConfig = Config.getConfig().Cleargrass.Apps
+
     let readFromFile () =
         use stream = File.Open("./cache/tokens.json", FileMode.OpenOrCreate)
 
         let tokensJson =
             try
                 Some(JsonSerializer.Deserialize<TokenCache>(stream))
-            with :? JsonException ->
-                Log.Error("Failed to parse tokens.json")
+            with :? JsonException as ex ->
+                logger.LogError(ex, "Failed to parse tokens.json")
                 None
 
         match tokensJson with
         | None -> ()
         | Some json ->
             for entry in json do
-                Log.Debug("Adding {username} to cache...", entry.Key)
-                tokenCache.Add(entry.Key, entry.Value)
+                logger.LogDebug("Adding {username} to cache...", entry.Key)
+                httpService.tokenCache.Add(entry.Key, entry.Value)
 
     let saveToFile () =
         use stream = File.Open("./cache/tokens.json", FileMode.OpenOrCreate)
         stream.Seek(0L, SeekOrigin.Begin) |> ignore
-        let tokensJson = JsonSerializer.Serialize(tokenCache)
+        let tokensJson = JsonSerializer.Serialize(httpService.tokenCache)
         stream.Write(Encoding.UTF8.GetBytes(tokensJson))
         stream.Close()
 
-        Log.Information("Saved tokens successfully...")
+        logger.LogInformation("Saved tokens successfully...")
 
-    let getAccessToken (username: string) =
+    do readFromFile ()
+
+    member _.getAccessToken(username: string) =
         async {
             let retrieveToken () =
                 let config = appConfig[username]
-                Log.Debug("Retrieving tokens for {username}...", username)
-                let! token = getToken config.Key config.Secret |> Async.RunSynchronously
+                logger.LogDebug("Retrieving tokens for {username}...", username)
+                let! token = httpService.getToken config.Key config.Secret |> Async.RunSynchronously
 
                 match token with
                 | None ->
-                    Log.Error("Failed to retrieve token for {username}!", username)
+                    logger.LogError("Failed to retrieve token for {username}!", username)
                     None
                 | Some token ->
-                    Log.Information("Successfully retrieved token for {username}!", username)
-                    tokenCache[username] <- token, DateTime.UtcNow.AddHours(1.0)
+                    logger.LogInformation("Successfully retrieved token for {username}!", username)
+                    httpService.tokenCache[username] <- token, DateTime.UtcNow.AddHours(1.0)
                     saveToFile ()
                     Some token
 
             let token =
-                match tokenCache.ContainsKey(username) with
+                match httpService.tokenCache.ContainsKey(username) with
                 | true ->
-                    let token, expireTime = tokenCache[username]
-                    Log.Debug("Trying cached token for {username} (expires {at})", username, expireTime)
+                    let token, expireTime = httpService.tokenCache[username]
+                    logger.LogDebug("Trying cached token for {username} (expires {at})", username, expireTime)
 
                     match expireTime < DateTime.UtcNow with
                     | true -> retrieveToken ()
@@ -101,7 +102,7 @@ module Tokens =
                 | false ->
                     match appConfig.ContainsKey(username) with
                     | false ->
-                        Log.Warning("Unable to find app config for {username}", username)
+                        logger.LogWarning("Unable to find app config for {username}", username)
                         None
                     | true -> retrieveToken ()
 

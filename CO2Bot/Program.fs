@@ -1,51 +1,82 @@
 ﻿module CO2Bot.Program
 
 open System
+open CO2Bot.Cleargrass.Api
+open CO2Bot.Services
+open CO2Bot.Services.ReceiverService
+open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Hosting
+
 open CO2Bot.Cleargrass.Tokens
-open CO2Bot.Log
-open CO2Bot.Bot
 open CO2Bot.Config
 
+open Serilog
+open Serilog.Core
 open Telegram.Bot
-open Telegram.Bot.Types
+
+
+let config = Config.getConfig ()
+
+Log.Logger <-
+    LoggerConfiguration()
+        .Enrich.FromLogContext()
+        .MinimumLevel.ControlledBy(LoggingLevelSwitch(config.App.LogLevel))
+        .WriteTo.Console(
+            outputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} <{SourceContext}>{NewLine}{Exception}"
+        )
+        .CreateLogger()
+
+
+type RcvService = ReceiverService<UpdateHandler>
+
+let createAndRunHostBuilder args =
+    try
+        try
+            Host
+                .CreateDefaultBuilder(args)
+                .ConfigureServices(fun context services ->
+                    services.AddSerilog() |> ignore
+
+                    services
+                        .AddHttpClient("telegram_bot_client")
+                        .AddTypedClient<ITelegramBotClient>(fun httpClient sp ->
+                            let options = TelegramBotClientOptions(config.Telegram.Token)
+                            TelegramBotClient(options, httpClient) :> ITelegramBotClient)
+                    |> ignore
+
+                    services
+                        .AddHttpClient("cleargrass_auth")
+                        .AddTypedClient<TokensHttpService>(fun httpClient ->
+                            httpClient.BaseAddress <- Uri "https://oauth.cleargrass.com/"
+                            httpClient.Timeout <- TimeSpan.FromSeconds 10.0
+                            TokensHttpService(httpClient))
+                    |> ignore
+
+                    services
+                        .AddHttpClient("cleargrass_api")
+                        .AddTypedClient<ApiHttpService>(fun httpClient sp ->
+                            httpClient.BaseAddress <- Uri "https://apis.cleargrass.com/"
+                            httpClient.Timeout <- TimeSpan.FromSeconds 10.0
+                            ApiHttpService(httpClient, sp.GetRequiredService()))
+                    |> ignore
+
+                    services.AddSingleton<TokensService>() |> ignore
+                    services.AddSingleton<ApiService>() |> ignore
+                    services.AddScoped<UpdateHandler>() |> ignore
+                    services.AddScoped<RcvService>() |> ignore
+
+                    services.AddHostedService<PollingService<RcvService>>() |> ignore)
+                .Build()
+                .Run()
+
+            0
+        with e ->
+            Log.Fatal(e, "Host terminated unexpectedly")
+            1
+    finally
+        Log.CloseAndFlush()
+
 
 
 [<EntryPoint>]
-let main _ =
-    Log.Information("Starting bot...")
-    Tokens.readFromFile ()
-
-    let { Telegram = telegramCfg } = Config.getConfig ()
-
-    let onTermination _ =
-        Bot.CTS.Cancel()
-        Tokens.saveToFile ()
-
-    Console.CancelKeyPress.Add onTermination
-    AppDomain.CurrentDomain.ProcessExit.Add onTermination
-
-    async {
-        do! Async.SwitchToThreadPool()
-
-        let! me = Bot.instance.GetMe() |> Async.AwaitTask
-
-        do!
-            Bot.instance.SetMyCommands(
-                [ BotCommand(command = $"/%s{telegramCfg.Command.Name}", description = telegramCfg.Command.Description) ]
-            )
-            |> Async.AwaitTask
-
-        Log.Debug("I am {bot}", me)
-
-        do! Bot.instance.DeleteWebhook() |> Async.AwaitTask
-        do! Bot.instance.DropPendingUpdates() |> Async.AwaitTask
-
-        Bot.instance.add_OnMessage (Bot.onMessage me)
-        Bot.instance.add_OnUpdate Bot.onUpdate
-
-        while true do
-            do! Async.Sleep 1000
-    }
-    |> Async.RunSynchronously
-
-    0
+let main args = createAndRunHostBuilder args
