@@ -49,6 +49,6 @@ type ReceiverService<'T when 'T :> IUpdateHandler>
                             cancellationToken = ct
                         )
                 with
-                | :? TaskCanceledException -> logger.LogInformation("Receive cancelled")
+                | :? OperationCanceledException -> logger.LogInformation("Receive cancelled")
                 | e -> logger.LogError(e, "Failed to receive updates")
             }
