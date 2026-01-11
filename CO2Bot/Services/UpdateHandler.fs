@@ -21,15 +21,11 @@ type UpdateHandler
     member val botMe: User option = None with get, set
 
     interface IUpdateHandler with
-        member this.HandleUpdateAsync(_, update: Update, cts: CancellationToken) =
+        member this.HandleUpdateAsync(_, update: Update, ct: CancellationToken) =
             match this.botMe with
             | Some bot ->
-                UpdateHandlerFuncs.handleUpdateAsync botClient logger cleargrassApi cleargrassTokens cts bot update
-                |> Async.StartAsTask
-                :> Tasks.Task
+                UpdateHandlerFuncs.handleUpdateAsync botClient logger cleargrassApi cleargrassTokens ct bot update
             | None -> failwith "botMe is not set!"
 
-        override this.HandleErrorAsync(_, exc: Exception, _: HandleErrorSource, cts: CancellationToken) =
-            UpdateHandlerFuncs.handleErrorAsync botClient logger cts cleargrassApi cleargrassTokens exc
-            |> Async.StartAsTask
-            :> Tasks.Task
+        override this.HandleErrorAsync(_, exc: Exception, _: HandleErrorSource, ct: CancellationToken) =
+            UpdateHandlerFuncs.handleErrorAsync botClient logger ct cleargrassApi cleargrassTokens exc

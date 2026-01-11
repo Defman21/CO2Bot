@@ -24,27 +24,27 @@ module UpdateHandlerFuncs =
     let { Placeholder = private textPlaceholder } = Config.getLocale ()
 
     let handleErrorAsync _ (logger: ILogger) _ _ _ (err: Exception) =
-        async { logger.LogInformation $"{err.ToString()}" }
+        task { logger.LogError(err, "Update handler error") }
 
     let private unknownUpdateHandlerAsync
         (botClient: ITelegramBotClient)
         (logger: ILogger)
-        (cts: CancellationToken)
+        (ct: CancellationToken)
         _
         _
         (update: Update)
         =
-        async { logger.LogInformation $"Unknown update type: {update.Type}" }
+        task { logger.LogDebug("Unknown update type: {updateType}", update.Type) }
 
     let handleCommand
         (botClient: ITelegramBotClient)
         (logger: ILogger)
-        (cts: CancellationToken)
+        (ct: CancellationToken)
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
         (message: Message)
         =
-        async {
+        task {
             let nextCallAt = antispam.GetValueOrDefault(message.Chat.Id, DateTime.UtcNow)
             let now = DateTime.UtcNow
 
@@ -63,14 +63,14 @@ module UpdateHandlerFuncs =
 
                 let! notifyMessage =
                     botClient.SendMessage(message.Chat, text = textPlaceholder, replyParameters = message)
-                    |> Async.AwaitTask
 
-                do! botClient.SendChatAction(message.Chat, ChatAction.Typing) |> Async.AwaitTask
+                do! botClient.SendChatAction(message.Chat, ChatAction.Typing)
 
                 let! tokens =
                     cleargrassCfg.Apps.Keys.ToImmutableList()
                     |> Seq.map cleargrassTokens.getAccessToken
                     |> Async.Parallel
+                    |> Async.StartAsTask
 
                 let! devicesData =
                     tokens
@@ -83,10 +83,9 @@ module UpdateHandlerFuncs =
                     |> Seq.map _.Value
                     |> Seq.map cleargrassApi.getDevices
                     |> Async.Parallel
+                    |> Async.StartAsTask
 
-                do!
-                    botClient.DeleteMessage(chatId = notifyMessage.Chat.Id, messageId = notifyMessage.Id)
-                    |> Async.AwaitTask
+                do! botClient.DeleteMessage(chatId = notifyMessage.Chat.Id, messageId = notifyMessage.Id)
 
                 let! messages =
                     devicesData
@@ -106,7 +105,6 @@ module UpdateHandlerFuncs =
                             )
                         ))
                     |> Task.WhenAll
-                    |> Async.AwaitTask
 
                 logger.LogDebug("Sent {num} messages!", messages.Length)
                 antispam[message.Chat.Id] <- DateTime.UtcNow.AddSeconds(telegramCfg.AntispamDuration)
@@ -116,7 +114,7 @@ module UpdateHandlerFuncs =
     let private onCommand
         (botClient: ITelegramBotClient)
         (logger: ILogger)
-        (cts: CancellationToken)
+        (ct: CancellationToken)
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
         (bot: User)
@@ -137,26 +135,26 @@ module UpdateHandlerFuncs =
         match botUsername.Equals(bot.Username, StringComparison.OrdinalIgnoreCase) with
         | true ->
             match command = telegramCfg.Command.Name with
-            | true -> handleCommand botClient logger cts cleargrassApi cleargrassTokens message
-            | false -> async { return () }
-        | false -> async { return () }
+            | true -> handleCommand botClient logger ct cleargrassApi cleargrassTokens message
+            | false -> Task.FromResult()
+        | false -> Task.FromResult()
 
     let private botOnMessageReceived
         (botClient: ITelegramBotClient)
         (logger: ILogger)
-        (cts: CancellationToken)
+        (ct: CancellationToken)
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
         (bot: User)
         (message: Message)
         =
-        async {
+        task {
             match telegramCfg.IsChatAllowed message.Chat.Id with
             | true ->
                 logger.LogInformation $"{message.Chat}: {message.Text}"
 
                 match message.Text.StartsWith '/' with
-                | true -> do! onCommand botClient logger cts cleargrassApi cleargrassTokens bot message
+                | true -> do! onCommand botClient logger ct cleargrassApi cleargrassTokens bot message
                 | false -> ()
             | false -> logger.LogWarning $"Chat {message.Chat} with ID={message.Chat.Id} is not allowed!"
         }
@@ -166,13 +164,13 @@ module UpdateHandlerFuncs =
         (logger: ILogger)
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
-        (cts: CancellationToken)
+        (ct: CancellationToken)
         (bot: User)
         (update: Update)
         =
-        async {
+        task {
             let handleUpdate f =
-                f botClient logger cts cleargrassApi cleargrassTokens
+                f botClient logger ct cleargrassApi cleargrassTokens
 
             try
                 let fn =

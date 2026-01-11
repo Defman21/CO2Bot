@@ -1,7 +1,7 @@
 module CO2Bot.Services.ReceiverService
 
+open System
 open System.Threading
-open System.Threading.Tasks
 open CO2Bot.Config
 open CO2Bot.Services.Internal
 open Microsoft.Extensions.Logging
@@ -14,16 +14,16 @@ type ReceiverService<'T when 'T :> IUpdateHandler>
     let { Telegram = telegramCfg } = Config.getConfig ()
 
     interface IReceiverService with
-        member this.ReceiveAsync(cts: CancellationToken) =
-            async {
+        member this.Receive(ct: CancellationToken) =
+            task {
                 logger.LogInformation("ReceiveAsync called")
 
                 let options = ReceiverOptions(AllowedUpdates = [||], DropPendingUpdates = true)
 
                 try
-                    let! me = botClient.GetMe(cts) |> Async.AwaitTask
-                    do! botClient.DeleteWebhook() |> Async.AwaitTask
-                    do! botClient.DropPendingUpdates() |> Async.AwaitTask
+                    let! me = botClient.GetMe(ct)
+                    do! botClient.DeleteWebhook()
+                    do! botClient.DropPendingUpdates()
 
                     let username =
                         match me.Username with
@@ -39,7 +39,6 @@ type ReceiverService<'T when 'T :> IUpdateHandler>
                                   description = telegramCfg.Command.Description
                               ) ]
                         )
-                        |> Async.AwaitTask
 
                     updateHandler.botMe <- Some me
 
@@ -47,9 +46,8 @@ type ReceiverService<'T when 'T :> IUpdateHandler>
                         botClient.ReceiveAsync(
                             updateHandler = updateHandler,
                             receiverOptions = options,
-                            cancellationToken = cts
+                            cancellationToken = ct
                         )
-                        |> Async.AwaitTask
                 with
                 | :? TaskCanceledException -> logger.LogInformation("Receive cancelled")
                 | e -> logger.LogError(e, "Failed to receive updates")
