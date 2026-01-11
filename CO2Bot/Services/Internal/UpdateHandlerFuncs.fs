@@ -16,20 +16,18 @@ open Telegram.Bot.Types.Enums
 
 
 module UpdateHandlerFuncs =
-    let { Telegram = private telegramCfg
-          Cleargrass = private cleargrassCfg } =
-        Config.getConfig ()
-
     let private antispam = Dictionary<int64, DateTime>()
-    let { Placeholder = private textPlaceholder } = Config.getLocale ()
 
-    let handleErrorAsync _ (logger: ILogger) _ _ _ (err: Exception) =
+    let handleErrorAsync _ (logger: ILogger) _ _ _ _ _ _ (err: Exception) =
         task { logger.LogError(err, "Update handler error") }
 
     let private unknownUpdateHandlerAsync
         (botClient: ITelegramBotClient)
         (logger: ILogger)
         (ct: CancellationToken)
+        _
+        _
+        _
         _
         _
         (update: Update)
@@ -40,6 +38,9 @@ module UpdateHandlerFuncs =
         (botClient: ITelegramBotClient)
         (logger: ILogger)
         (ct: CancellationToken)
+        (telegramCfg: TelegramConfig)
+        (appCfg: AppConfig)
+        (cleargrassCfg: CleargrassConfig)
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
         (message: Message)
@@ -62,7 +63,7 @@ module UpdateHandlerFuncs =
                 antispam[message.Chat.Id] <- DateTime.UtcNow.AddSeconds(telegramCfg.AntispamDuration)
 
                 let! notifyMessage =
-                    botClient.SendMessage(message.Chat, text = textPlaceholder, replyParameters = message)
+                    botClient.SendMessage(message.Chat, text = appCfg.Locale.Placeholder, replyParameters = message)
 
                 do! botClient.SendChatAction(message.Chat, ChatAction.Typing)
 
@@ -115,6 +116,9 @@ module UpdateHandlerFuncs =
         (botClient: ITelegramBotClient)
         (logger: ILogger)
         (ct: CancellationToken)
+        (telegramCfg: TelegramConfig)
+        (appCfg: AppConfig)
+        (cleargrassCfg: CleargrassConfig)
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
         (bot: User)
@@ -135,7 +139,17 @@ module UpdateHandlerFuncs =
         match botUsername.Equals(bot.Username, StringComparison.OrdinalIgnoreCase) with
         | true ->
             match command = telegramCfg.Command.Name with
-            | true -> handleCommand botClient logger ct cleargrassApi cleargrassTokens message
+            | true ->
+                handleCommand
+                    botClient
+                    logger
+                    ct
+                    telegramCfg
+                    appCfg
+                    cleargrassCfg
+                    cleargrassApi
+                    cleargrassTokens
+                    message
             | false -> Task.FromResult()
         | false -> Task.FromResult()
 
@@ -143,6 +157,9 @@ module UpdateHandlerFuncs =
         (botClient: ITelegramBotClient)
         (logger: ILogger)
         (ct: CancellationToken)
+        (telegramCfg: TelegramConfig)
+        (appCfg: AppConfig)
+        (cleargrassCfg: CleargrassConfig)
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
         (bot: User)
@@ -154,7 +171,19 @@ module UpdateHandlerFuncs =
                 logger.LogInformation $"{message.Chat}: {message.Text}"
 
                 match message.Text.StartsWith '/' with
-                | true -> do! onCommand botClient logger ct cleargrassApi cleargrassTokens bot message
+                | true ->
+                    do!
+                        onCommand
+                            botClient
+                            logger
+                            ct
+                            telegramCfg
+                            appCfg
+                            cleargrassCfg
+                            cleargrassApi
+                            cleargrassTokens
+                            bot
+                            message
                 | false -> ()
             | false -> logger.LogWarning $"Chat {message.Chat} with ID={message.Chat.Id} is not allowed!"
         }
@@ -162,15 +191,18 @@ module UpdateHandlerFuncs =
     let handleUpdateAsync
         (botClient: ITelegramBotClient)
         (logger: ILogger)
+        (ct: CancellationToken)
+        (telegramCfg: TelegramConfig)
+        (appCfg: AppConfig)
+        (cleargrassCfg: CleargrassConfig)
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
-        (ct: CancellationToken)
         (bot: User)
         (update: Update)
         =
         task {
             let handleUpdate f =
-                f botClient logger ct cleargrassApi cleargrassTokens
+                f botClient logger ct telegramCfg appCfg cleargrassCfg cleargrassApi cleargrassTokens
 
             try
                 let fn =

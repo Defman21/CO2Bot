@@ -12,6 +12,7 @@ open System.Net.Http
 open System.Net.Http.Headers
 open System.Text
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
 open Telegram.Bot.Extensions
 
 type ApiHttpService(httpClient: HttpClient, logger: ILogger<ApiHttpService>) =
@@ -37,13 +38,14 @@ type ApiHttpService(httpClient: HttpClient, logger: ILogger<ApiHttpService>) =
                 return Some devices
         }
 
-type ApiService(httpService: ApiHttpService) =
-    let devicesConfig = Config.getConfig().Cleargrass.Devices
+type ApiService(httpService: ApiHttpService, cleargrassCfg: IOptions<CleargrassConfig>, appCfg: IOptions<AppConfig>) =
+    let cleargrassCfg = cleargrassCfg.Value
+    let appCfg = appCfg.Value
 
     member _.getDevices token = httpService.getDevices token
 
     member _.buildMarkdownMessage(devices: DevicesResponse) =
-        let { Measurements = locale } = Config.getLocale ()
+        let { Measurements = locale } = appCfg.Locale
 
         let appendTo
             (sb: StringBuilder)
@@ -74,7 +76,7 @@ type ApiService(httpService: ApiHttpService) =
             devices.Devices
             |> Seq.fold (fun state value -> Map.add value.Info.MAC value state) (Map<string, Device> [])
 
-        devicesConfig
+        cleargrassCfg.Devices
         |> Seq.filter (fun cfg -> Map.containsKey cfg.Key devicePerMac)
         |> Seq.fold
             (fun

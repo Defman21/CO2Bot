@@ -12,6 +12,7 @@ open System.Text.Json
 open CO2Bot.Cleargrass.Types
 open CO2Bot.Config
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
 
 type private TokenCache = Dictionary<string, string * DateTime>
 
@@ -42,8 +43,9 @@ type TokensHttpService(httpClient: HttpClient) =
         }
 
 
-type TokensService(httpService: TokensHttpService, logger: ILogger<TokensService>) =
-    let appConfig = Config.getConfig().Cleargrass.Apps
+type TokensService
+    (httpService: TokensHttpService, logger: ILogger<TokensService>, cleargrassCfg: IOptions<CleargrassConfig>) =
+    let cleargrassCfg = cleargrassCfg.Value
 
     let readFromFile () =
         use stream = File.Open("./cache/tokens.json", FileMode.OpenOrCreate)
@@ -64,7 +66,7 @@ type TokensService(httpService: TokensHttpService, logger: ILogger<TokensService
 
     do readFromFile ()
 
-    member _.saveToFile () =
+    member _.saveToFile() =
         use stream = File.Open("./cache/tokens.json", FileMode.OpenOrCreate)
         stream.Seek(0L, SeekOrigin.Begin) |> ignore
         let tokensJson = JsonSerializer.Serialize(httpService.tokenCache)
@@ -76,9 +78,12 @@ type TokensService(httpService: TokensHttpService, logger: ILogger<TokensService
     member _.getAccessToken(username: string) =
         async {
             let retrieveToken () =
-                let config = appConfig[username]
+                let cleargrassAppCfg = cleargrassCfg.Apps[username]
                 logger.LogDebug("Retrieving tokens for {username}...", username)
-                let! token = httpService.getToken config.Key config.Secret |> Async.RunSynchronously
+
+                let! token =
+                    httpService.getToken cleargrassAppCfg.Key cleargrassAppCfg.Secret
+                    |> Async.RunSynchronously
 
                 match token with
                 | None ->
@@ -99,7 +104,7 @@ type TokensService(httpService: TokensHttpService, logger: ILogger<TokensService
                     | true -> retrieveToken ()
                     | false -> Some token
                 | false ->
-                    match appConfig.ContainsKey(username) with
+                    match cleargrassCfg.Apps.ContainsKey(username) with
                     | false ->
                         logger.LogWarning("Unable to find app config for {username}", username)
                         None

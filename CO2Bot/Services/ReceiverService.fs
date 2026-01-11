@@ -5,13 +5,19 @@ open System.Threading
 open CO2Bot.Config
 open CO2Bot.Services.Internal
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
 open Telegram.Bot
 open Telegram.Bot.Polling
 open Telegram.Bot.Types
 
 type ReceiverService<'T when 'T :> IUpdateHandler>
-    (botClient: ITelegramBotClient, updateHandler: UpdateHandler, logger: ILogger<'T>) =
-    let { Telegram = telegramCfg } = Config.getConfig ()
+    (
+        botClient: ITelegramBotClient,
+        updateHandler: UpdateHandler,
+        logger: ILogger<'T>,
+        telegramCfg: IOptions<TelegramConfig>
+    ) =
+    let telegramCfg = telegramCfg.Value
 
     interface IReceiverService with
         member this.Receive(ct: CancellationToken) =

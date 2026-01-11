@@ -1,32 +1,44 @@
-app:
-  log_level: debug
-  locale:
-    placeholder: Probing...
-    measurements: 
+Serilog: # Logging configuration: https://github.com/serilog/serilog-settings-configuration
+  Using:
+    - Serilog.Sinks.Console
+  WriteTo:
+    - Name: Console
+      Args:
+        OutputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} <{SourceContext}>{NewLine}{Exception}"
+  MinimumLevel: Debug # Information, Warning, Error, Fatal
+  Enrich:
+    - FromLogContext
+
+App:
+  Locale:
+    Placeholder: Probing...
+    Measurements: 
       # You can omit configuration for a specific measurement to use default labels
-      # Available measurements: co2, temp, humidity, pm25, pm10, tvoc, etvoc, battery, noise
-      temp:
-        name: Temperature
-        measurement: C
-telegram:
-  token: "YOUR_TELEGRAM_BOT_TOKEN"
-  antispam_duration: 10  # Time in seconds between command calls in the same chat
-  allowed_chats:  # List of chat IDs where the bot can be used
+      # Available measurements: CO2, Temp, Humidity, PM25, PM10, TVOC, ETVOC, Battery, Noise
+      Temp:
+        Name: Temperature
+        Measurement: C
+
+Telegram:
+  Token: "YOUR_TELEGRAM_BOT_TOKEN"
+  AntispamDuration: 10  # Time in seconds between command calls in the same chat
+  AllowedChats:  # List of chat IDs where the bot can be used
     - 0 # Allow to be used in any chat
     - 123456
     - -123456
-  command:
-    name: temp  # custom command name, temp by default (so /temp@yourbotname)
-    description: Get thermostat data
-cleargrass:
-  apps:
+  Command:
+    Name: temp  # custom command name, temp by default (so /temp@yourbotname)
+    Description: Get thermostat data
+
+Cleargrass:
+  Cpps:
     defman:  # Unique identifier
-      key: SOME-KEY
-      secret: someverysecretvalue
+      Key: SOME-KEY
+      Secret: someverysecretvalue
     notdefman:
-      key: SOME-OTHER-KEY
-      secret: somesupersecretvalue
-  devices:
+      Key: SOME-OTHER-KEY
+      Secret: somesupersecretvalue
+  Devices:
     ABCDEF1234:
-      room_name: Bedroom
-      owner_username: defman
+      RoomName: Bedroom
+      OwnerUsername: defman

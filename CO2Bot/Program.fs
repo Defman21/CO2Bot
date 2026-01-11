@@ -2,29 +2,18 @@
 
 open System
 open CO2Bot.Cleargrass.Api
+open CO2Bot.Config
 open CO2Bot.Services
 open CO2Bot.Services.ReceiverService
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 
 open CO2Bot.Cleargrass.Tokens
-open CO2Bot.Config
 
+open Microsoft.Extensions.Options
 open Serilog
-open Serilog.Core
 open Telegram.Bot
-
-
-let config = Config.getConfig ()
-
-Log.Logger <-
-    LoggerConfiguration()
-        .Enrich.FromLogContext()
-        .MinimumLevel.ControlledBy(LoggingLevelSwitch(config.App.LogLevel))
-        .WriteTo.Console(
-            outputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} <{SourceContext}>{NewLine}{Exception}"
-        )
-        .CreateLogger()
 
 
 type RcvService = ReceiverService<UpdateHandler>
@@ -34,13 +23,26 @@ let createAndRunHostBuilder args =
         try
             Host
                 .CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration(fun context builder ->
+                    builder.AddYamlFile("config/config.yaml", optional = false) |> ignore)
                 .ConfigureServices(fun context services ->
-                    services.AddSerilog() |> ignore
+                    services.AddSerilog(fun sp loggerConfiguration ->
+                        loggerConfiguration.ReadFrom.Configuration(context.Configuration) |> ignore)
+                    |> ignore
+
+                    services.Configure<TelegramConfig>(context.Configuration.GetSection("Telegram"))
+                    |> ignore
+
+                    services.Configure<CleargrassConfig>(context.Configuration.GetSection("Cleargrass"))
+                    |> ignore
+
+                    services.Configure<AppConfig>(context.Configuration.GetSection("App")) |> ignore
 
                     services
                         .AddHttpClient("telegram_bot_client")
                         .AddTypedClient<ITelegramBotClient>(fun httpClient sp ->
-                            let options = TelegramBotClientOptions(config.Telegram.Token)
+                            let telegramCfg = sp.GetRequiredService<IOptions<TelegramConfig>>().Value
+                            let options = TelegramBotClientOptions(telegramCfg.Token)
                             TelegramBotClient(options, httpClient) :> ITelegramBotClient)
                     |> ignore
 
