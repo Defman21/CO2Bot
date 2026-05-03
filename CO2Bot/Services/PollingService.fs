@@ -3,30 +3,61 @@ namespace CO2Bot.Services
 open System
 open System.Threading
 open CO2Bot.Cleargrass.Tokens
-open CO2Bot.Services.Internal
+open CO2Bot.Config
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
+open Telegram.Bot
+open Telegram.Bot.Polling
+open Telegram.Bot.Types
 
-type PollingService<'T when 'T :> IReceiverService>(sp: IServiceProvider, logger: ILogger<PollingService<'T>>) =
+type PollingService
+    (
+        botClient: ITelegramBotClient,
+        updateHandler: UpdateHandler,
+        telegramCfg: IOptions<TelegramConfig>,
+        sp: IServiceProvider,
+        logger: ILogger<PollingService>
+    ) =
     inherit BackgroundService()
 
     member this.DoWork(ct: CancellationToken) =
         task {
-            let getReceiverService _ =
-                use scope = sp.CreateScope()
-                let service: 'T = scope.ServiceProvider.GetRequiredService<'T>()
-                service
-
-            let cancellationNotRequested _ = not ct.IsCancellationRequested
+            logger.LogInformation("Started polling service")
+            let telegramCfg = telegramCfg.Value
+            let options = ReceiverOptions(AllowedUpdates = [||], DropPendingUpdates = true)
 
             try
-                return
-                    Seq.initInfinite getReceiverService
-                    |> Seq.takeWhile cancellationNotRequested
-                    |> Seq.iter (fun r -> r.Receive ct |> Async.AwaitTask |> Async.RunSynchronously)
-            with e ->
-                logger.LogError(e, "Polling failed with exception")
+                let! me = botClient.GetMe(ct)
+                do! botClient.DeleteWebhook()
+                do! botClient.DropPendingUpdates()
+
+                let username =
+                    match me.Username with
+                    | null -> "Unknown bot"
+                    | username -> username
+
+                do!
+                    botClient.SetMyCommands(
+                        [ BotCommand(
+                              command = $"/%s{telegramCfg.Command.Name}",
+                              description = telegramCfg.Command.Description
+                          ) ]
+                    )
+
+                updateHandler.botMe <- Some me
+
+                botClient.StartReceiving(
+                    updateHandler = updateHandler,
+                    receiverOptions = options,
+                    cancellationToken = ct
+                )
+
+                logger.LogInformation("Started receiving updates for {username}", username)
+            with
+            | :? OperationCanceledException -> logger.LogInformation("Receive cancelled")
+            | e -> logger.LogError(e, "Failed to receive updates")
         }
 
     override this.ExecuteAsync(ct: CancellationToken) =

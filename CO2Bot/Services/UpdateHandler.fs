@@ -27,20 +27,28 @@ type UpdateHandler
 
     interface IUpdateHandler with
         member this.HandleUpdateAsync(_, update: Update, ct: CancellationToken) =
-            match this.botMe with
-            | Some bot ->
-                UpdateHandlerFuncs.handleUpdateAsync
-                    botClient
-                    logger
-                    ct
-                    telegramCfg.Value
-                    appCfg.Value
-                    cleargrassCfg.Value
-                    cleargrassApi
-                    cleargrassTokens
-                    bot
-                    update
-            | None -> failwith "botMe is not set!"
+            task {
+                logger.LogDebug("HandleUpdateAsync called for Update = {Update}", update)
+
+                match this.botMe with
+                | Some bot ->
+                    task {
+                        ignore
+                        <| UpdateHandlerFuncs.handleUpdateAsync
+                            botClient
+                            logger
+                            ct
+                            telegramCfg.Value
+                            appCfg.Value
+                            cleargrassCfg.Value
+                            cleargrassApi
+                            cleargrassTokens
+                            bot
+                            update
+                    }
+                    |> ignore
+                | None -> failwith "botMe is not set!"
+            }
 
         override this.HandleErrorAsync(_, exc: Exception, _: HandleErrorSource, ct: CancellationToken) =
             UpdateHandlerFuncs.handleErrorAsync

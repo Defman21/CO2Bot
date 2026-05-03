@@ -168,7 +168,7 @@ module UpdateHandlerFuncs =
         task {
             match telegramCfg.IsChatAllowed message.Chat.Id with
             | true ->
-                logger.LogInformation $"{message.Chat}: {message.Text}"
+                logger.LogInformation("{From}: {Text}", message.Chat, message.Text)
 
                 match message.Text.StartsWith '/' with
                 | true ->
@@ -185,7 +185,7 @@ module UpdateHandlerFuncs =
                             bot
                             message
                 | false -> ()
-            | false -> logger.LogWarning $"Chat {message.Chat} with ID={message.Chat.Id} is not allowed!"
+            | false -> logger.LogWarning("Chat {Chat} with ID={ChatId} is not allowed!", message.Chat, message.Chat.Id)
         }
 
     let handleUpdateAsync

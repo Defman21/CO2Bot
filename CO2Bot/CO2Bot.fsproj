@@ -15,11 +15,9 @@
         <Compile Include="Cleargrass\Types.fs"/>
         <Compile Include="Cleargrass\Tokens.fs"/>
         <Compile Include="Cleargrass\Api.fs"/>
-        <Compile Include="Services\Internal\IReceiverService.fs"/>
         <Compile Include="Services\Internal\UpdateHandlerFuncs.fs"/>
         <Compile Include="Services\UpdateHandler.fs"/>
         <Compile Include="Services\PollingService.fs"/>
-        <Compile Include="Services\ReceiverService.fs"/>
         <Compile Include="Program.fs"/>
     </ItemGroup>
 

@@ -4,7 +4,6 @@ open System
 open CO2Bot.Cleargrass.Api
 open CO2Bot.Config
 open CO2Bot.Services
-open CO2Bot.Services.ReceiverService
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
@@ -16,61 +15,53 @@ open Serilog
 open Telegram.Bot
 
 
-type RcvService = ReceiverService<UpdateHandler>
-
 let createAndRunHostBuilder args =
     try
         try
-            Host
-                .CreateDefaultBuilder(args)
-                .ConfigureAppConfiguration(fun context builder ->
-                    builder.AddYamlFile("config/config.yaml", optional = false) |> ignore)
-                .ConfigureServices(fun context services ->
-                    services.AddSerilog(fun sp loggerConfiguration ->
-                        loggerConfiguration.ReadFrom.Configuration(context.Configuration) |> ignore)
-                    |> ignore
+            let host = Host.CreateApplicationBuilder()
+            host.Configuration.AddYamlFile("config/config.yaml", optional = false) |> ignore
 
-                    services.Configure<TelegramConfig>(context.Configuration.GetSection("Telegram"))
-                    |> ignore
+            host.Services.AddSerilog(fun config -> config.ReadFrom.Configuration(host.Configuration) |> ignore)
+            |> ignore
 
-                    services.Configure<CleargrassConfig>(context.Configuration.GetSection("Cleargrass"))
-                    |> ignore
+            host.Services.Configure<TelegramConfig>(host.Configuration.GetSection("Telegram"))
+            |> ignore
 
-                    services.Configure<AppConfig>(context.Configuration.GetSection("App")) |> ignore
+            host.Services.Configure<CleargrassConfig>(host.Configuration.GetSection("Cleargrass"))
+            |> ignore
 
-                    services
-                        .AddHttpClient("telegram_bot_client")
-                        .AddTypedClient<ITelegramBotClient>(fun httpClient sp ->
-                            let telegramCfg = sp.GetRequiredService<IOptions<TelegramConfig>>().Value
-                            let options = TelegramBotClientOptions(telegramCfg.Token)
-                            TelegramBotClient(options, httpClient) :> ITelegramBotClient)
-                    |> ignore
+            host.Services.Configure<AppConfig>(host.Configuration.GetSection("App"))
+            |> ignore
 
-                    services
-                        .AddHttpClient("cleargrass_auth")
-                        .AddTypedClient<TokensHttpService>(fun httpClient ->
-                            httpClient.BaseAddress <- Uri "https://oauth.cleargrass.com/"
-                            httpClient.Timeout <- TimeSpan.FromSeconds 10.0
-                            TokensHttpService(httpClient))
-                    |> ignore
+            host.Services
+                .AddHttpClient("TelegramBotClient")
+                .AddTypedClient<ITelegramBotClient>(fun client services ->
+                    let telegramCfg = services.GetRequiredService<IOptions<TelegramConfig>>().Value
+                    let options = TelegramBotClientOptions(telegramCfg.Token)
+                    TelegramBotClient(options, client) :> ITelegramBotClient)
+            |> ignore
 
-                    services
-                        .AddHttpClient("cleargrass_api")
-                        .AddTypedClient<ApiHttpService>(fun httpClient sp ->
-                            httpClient.BaseAddress <- Uri "https://apis.cleargrass.com/"
-                            httpClient.Timeout <- TimeSpan.FromSeconds 10.0
-                            ApiHttpService(httpClient, sp.GetRequiredService()))
-                    |> ignore
+            host.Services
+                .AddHttpClient("CleargrassAuth")
+                .AddTypedClient<TokensHttpService>(fun client ->
+                    client.BaseAddress <- Uri "https://oauth.cleargrass.com/"
+                    client.Timeout <- TimeSpan.FromSeconds 10.0
+                    TokensHttpService(client))
+            |> ignore
 
-                    services.AddSingleton<TokensService>() |> ignore
-                    services.AddSingleton<ApiService>() |> ignore
-                    services.AddScoped<UpdateHandler>() |> ignore
-                    services.AddScoped<RcvService>() |> ignore
+            host.Services
+                .AddHttpClient("CleargrassAPI")
+                .AddTypedClient<ApiHttpService>(fun client services ->
+                    client.BaseAddress <- Uri "https://apis.cleargrass.com/"
+                    client.Timeout <- TimeSpan.FromSeconds 10.0
+                    ApiHttpService(client, services.GetRequiredService()))
+            |> ignore
 
-                    services.AddHostedService<PollingService<RcvService>>() |> ignore)
-                .Build()
-                .Run()
-
+            host.Services.AddSingleton<TokensService>() |> ignore
+            host.Services.AddSingleton<ApiService>() |> ignore
+            host.Services.AddScoped<UpdateHandler>() |> ignore
+            host.Services.AddHostedService<PollingService>() |> ignore
+            host.Build().Run()
             0
         with e ->
             Log.Fatal(e, "Host terminated unexpectedly")
