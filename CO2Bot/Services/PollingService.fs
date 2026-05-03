@@ -24,7 +24,6 @@ type PollingService
 
     member this.DoWork(ct: CancellationToken) =
         task {
-            logger.LogInformation("Started polling service")
             let telegramCfg = telegramCfg.Value
             let options = ReceiverOptions(AllowedUpdates = [||], DropPendingUpdates = true)
 
@@ -61,7 +60,7 @@ type PollingService
         }
 
     override this.ExecuteAsync(ct: CancellationToken) =
-        logger.LogInformation("Started polling service")
+        logger.LogInformation("Started polling service, ServerGC = {ServerGC}", System.Runtime.GCSettings.IsServerGC)
         this.DoWork ct
 
     override this.StopAsync(ct: CancellationToken) =
