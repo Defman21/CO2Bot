@@ -48,7 +48,7 @@ type TokensService
     let cleargrassCfg = cleargrassCfg.Value
 
     let readFromFile () =
-        use stream = File.Open("./cache/tokens.json", FileMode.OpenOrCreate)
+        use stream = File.Open("./cache/tokens.json", FileMode.OpenOrCreate, FileAccess.Read)
 
         let tokensJson =
             try
@@ -67,11 +67,9 @@ type TokensService
     do readFromFile ()
 
     member _.saveToFile() =
-        use stream = File.Open("./cache/tokens.json", FileMode.OpenOrCreate)
-        stream.Seek(0L, SeekOrigin.Begin) |> ignore
+        use stream = File.Open("./cache/tokens.json", FileMode.Create, FileAccess.Write)
         let tokensJson = JsonSerializer.Serialize(httpService.tokenCache)
         stream.Write(Encoding.UTF8.GetBytes(tokensJson))
-        stream.Close()
 
         logger.LogInformation("Saved tokens successfully...")
 
