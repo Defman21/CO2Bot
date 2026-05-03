@@ -28,36 +28,36 @@ type UpdateHandler
     interface IUpdateHandler with
         member this.HandleUpdateAsync(_, update: Update, ct: CancellationToken) =
             task {
-                logger.LogDebug("HandleUpdateAsync called for Update = {Update}", update)
+                logger.LogDebug("HandleUpdateAsync called for Update = {UpdateId}", update.Id)
 
                 match this.botMe with
                 | Some bot ->
-                    task {
-                        ignore
-                        <| UpdateHandlerFuncs.handleUpdateAsync
-                            botClient
-                            logger
-                            ct
-                            telegramCfg.Value
-                            appCfg.Value
-                            cleargrassCfg.Value
-                            cleargrassApi
-                            cleargrassTokens
-                            bot
-                            update
-                    }
-                    |> ignore
+                    ignore
+                    <| UpdateHandlerFuncs.handleUpdateAsync
+                        botClient
+                        logger
+                        ct
+                        telegramCfg.Value
+                        appCfg.Value
+                        cleargrassCfg.Value
+                        cleargrassApi
+                        cleargrassTokens
+                        bot
+                        update
                 | None -> failwith "botMe is not set!"
             }
 
         override this.HandleErrorAsync(_, exc: Exception, _: HandleErrorSource, ct: CancellationToken) =
-            UpdateHandlerFuncs.handleErrorAsync
-                botClient
-                logger
-                ct
-                telegramCfg.Value
-                appCfg.Value
-                cleargrassCfg.Value
-                cleargrassApi
-                cleargrassTokens
-                exc
+            task {
+                ignore
+                <| UpdateHandlerFuncs.handleErrorAsync
+                    botClient
+                    logger
+                    ct
+                    telegramCfg.Value
+                    appCfg.Value
+                    cleargrassCfg.Value
+                    cleargrassApi
+                    cleargrassTokens
+                    exc
+            }
