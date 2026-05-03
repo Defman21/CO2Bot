@@ -1,0 +1,6 @@
+<Solution>
+    <Folder Name="/Solution Items/">
+        <File Path="compose.yaml"/>
+    </Folder>
+    <Project Path="CO2Bot/CO2Bot.fsproj"/>
+</Solution>
