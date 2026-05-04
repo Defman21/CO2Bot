@@ -1,6 +1,7 @@
 namespace CO2Bot.Cleargrass.Api
 
 open System.Linq
+open System.Threading
 open CO2Bot.Cleargrass.Types
 
 open System.Net.Http.Json
@@ -16,8 +17,8 @@ open Microsoft.Extensions.Options
 open Telegram.Bot.Extensions
 
 type ApiHttpService(httpClient: HttpClient, logger: ILogger<ApiHttpService>) =
-    member _.getDevices token =
-        async {
+    member _.getDevices (ct: CancellationToken) (token: string) =
+        task {
             let uri = UriBuilder("http://localhost/v1/apis/devices")
             let query = HttpUtility.ParseQueryString(uri.Query)
             query["ts"] <- DateTime.UtcNow.Ticks.ToString()
@@ -25,15 +26,15 @@ type ApiHttpService(httpClient: HttpClient, logger: ILogger<ApiHttpService>) =
 
             use httpReq = new HttpRequestMessage(HttpMethod.Get, uri.Uri.PathAndQuery)
             httpReq.Headers.Authorization <- AuthenticationHeaderValue("Bearer", token)
-            let! response = httpClient.SendAsync(httpReq) |> Async.AwaitTask
+            let! response = httpClient.SendAsync(httpReq, cancellationToken = ct)
 
             match response.IsSuccessStatusCode with
             | false ->
-                let! body = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+                let! body = response.Content.ReadAsStringAsync(ct)
                 logger.LogError("Failed to get devices: {body}", body)
                 return None
             | true ->
-                let! devices = response.Content.ReadFromJsonAsync<DevicesResponse>() |> Async.AwaitTask
+                let! devices = response.Content.ReadFromJsonAsync<DevicesResponse>(ct)
                 logger.LogDebug("Devices: {devices}", devices)
                 return Some devices
         }
@@ -42,7 +43,7 @@ type ApiService(httpService: ApiHttpService, cleargrassCfg: IOptions<CleargrassC
     let cleargrassCfg = cleargrassCfg.Value
     let appCfg = appCfg.Value
 
-    member _.getDevices token = httpService.getDevices token
+    member _.getDevices (ct: CancellationToken) (token: string) = httpService.getDevices ct token
 
     member _.buildMarkdownMessage(devices: DevicesResponse) =
         let { Measurements = locale } = appCfg.Locale

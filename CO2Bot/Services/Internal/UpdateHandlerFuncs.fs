@@ -3,6 +3,7 @@ namespace CO2Bot.Services.Internal
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Linq
 open System.Threading
 open System.Threading.Tasks
 open CO2Bot.Cleargrass.Api
@@ -44,6 +45,7 @@ module UpdateHandlerFuncs =
         (cleargrassApi: ApiService)
         (cleargrassTokens: TokensService)
         (message: Message)
+        (argUsername: string)
         =
         task {
             let nextCallAt = antispam.GetValueOrDefault(message.Chat.Id, DateTime.UtcNow)
@@ -63,15 +65,29 @@ module UpdateHandlerFuncs =
                 antispam[message.Chat.Id] <- DateTime.UtcNow.AddSeconds(telegramCfg.AntispamDuration)
 
                 let! notifyMessage =
-                    botClient.SendMessage(message.Chat, text = appCfg.Locale.Placeholder, replyParameters = message)
+                    botClient.SendMessage(
+                        message.Chat,
+                        text = appCfg.Locale.Placeholder,
+                        replyParameters = message,
+                        cancellationToken = ct
+                    )
 
-                do! botClient.SendChatAction(message.Chat, ChatAction.Typing)
+                do! botClient.SendChatAction(message.Chat, ChatAction.Typing, cancellationToken = ct)
 
-                let! tokens =
-                    cleargrassCfg.Apps.Keys.ToImmutableList()
-                    |> Seq.map cleargrassTokens.getAccessToken
-                    |> Async.Parallel
-                    |> Async.StartAsTask
+                let usernames =
+                    match String.IsNullOrWhiteSpace(argUsername) with
+                    | true -> cleargrassCfg.Apps.Keys.ToImmutableList()
+                    | false ->
+                        match
+                            cleargrassCfg.Apps
+                                .Where(_.Value.Names.Contains(argUsername))
+                                .Select(_.Key)
+                                .ToImmutableList()
+                        with
+                        | users when users.Count = 0 -> cleargrassCfg.Apps.Keys.ToImmutableList()
+                        | users -> users
+
+                let! tokens = usernames |> Seq.map (cleargrassTokens.getAccessToken ct) |> Task.WhenAll
 
                 let! devicesData =
                     tokens
@@ -82,11 +98,15 @@ module UpdateHandlerFuncs =
                             false
                         | Some _ -> true)
                     |> Seq.map _.Value
-                    |> Seq.map cleargrassApi.getDevices
-                    |> Async.Parallel
-                    |> Async.StartAsTask
+                    |> Seq.map (cleargrassApi.getDevices ct)
+                    |> Task.WhenAll
 
-                do! botClient.DeleteMessage(chatId = notifyMessage.Chat.Id, messageId = notifyMessage.Id)
+                do!
+                    botClient.DeleteMessage(
+                        chatId = notifyMessage.Chat.Id,
+                        messageId = notifyMessage.Id,
+                        cancellationToken = ct
+                    )
 
                 let! messages =
                     devicesData
@@ -103,7 +123,8 @@ module UpdateHandlerFuncs =
                                 Text = text,
                                 ParseMode = ParseMode.Html,
                                 ReplyParameters = message
-                            )
+                            ),
+                            cancellationToken = ct
                         ))
                     |> Task.WhenAll
 
@@ -129,7 +150,8 @@ module UpdateHandlerFuncs =
             | idx when idx < 0 -> message.Text.Length
             | idx -> idx
 
-        let rawCommand = message.Text[..space].ToLower()
+        let rawCommand = message.Text[..space].ToLower().TrimEnd()
+        let commandArg = message.Text[space..].ToLower().TrimStart()
 
         let command, botUsername =
             match rawCommand.LastIndexOf '@' with
@@ -150,6 +172,7 @@ module UpdateHandlerFuncs =
                     cleargrassApi
                     cleargrassTokens
                     message
+                    commandArg
             | false -> Task.FromResult()
         | false -> Task.FromResult()
 

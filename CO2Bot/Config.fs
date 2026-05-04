@@ -57,7 +57,10 @@ type CleargrassConfig =
     { Apps: Dictionary<string, CleargrassAppConfig>
       Devices: Dictionary<string, CleargrassDeviceConfig> }
 
-and [<CLIMutable>] CleargrassAppConfig = { Key: string; Secret: string }
+and [<CLIMutable>] CleargrassAppConfig =
+    { Key: string
+      Secret: string
+      Names: HashSet<string> }
 
 and [<CLIMutable>] CleargrassDeviceConfig =
     { RoomName: string

@@ -29,8 +29,8 @@ type PollingService
 
             try
                 let! me = botClient.GetMe(ct)
-                do! botClient.DeleteWebhook()
-                do! botClient.DropPendingUpdates()
+                do! botClient.DeleteWebhook(cancellationToken = ct)
+                do! botClient.DropPendingUpdates(cancellationToken = ct)
 
                 let username =
                     match me.Username with
@@ -42,7 +42,8 @@ type PollingService
                         [ BotCommand(
                               command = $"/%s{telegramCfg.Command.Name}",
                               description = telegramCfg.Command.Description
-                          ) ]
+                          ) ],
+                        cancellationToken = ct
                     )
 
                 updateHandler.botMe <- Some me
