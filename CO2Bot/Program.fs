@@ -1,6 +1,8 @@
 ﻿module CO2Bot.Program
 
 open System
+open System.Net
+open System.Net.Http
 open CO2Bot.Cleargrass.Api
 open CO2Bot.Config
 open CO2Bot.Services
@@ -51,6 +53,11 @@ let createAndRunHostBuilder args =
 
             host.Services
                 .AddHttpClient("CleargrassAPI")
+                .ConfigurePrimaryHttpMessageHandler(fun () ->
+                    new HttpClientHandler(
+                        AutomaticDecompression = (DecompressionMethods.GZip ||| DecompressionMethods.Deflate)
+                    )
+                    :> HttpMessageHandler)
                 .AddTypedClient<ApiHttpService>(fun client services ->
                     client.BaseAddress <- Uri "https://apis.cleargrass.com/"
                     client.Timeout <- TimeSpan.FromSeconds 10.0
